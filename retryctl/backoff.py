@@ -1,9 +1,9 @@
-"""Backoff strategy implementations for retryctl."""
+"""Backoff strategies for retry logic."""
 
 import random
-import time
+from collections.abc import Generator
 from enum import Enum
-from typing import Iterator
+from typing import Any
 
 
 class BackoffStrategy(str, Enum):
@@ -13,37 +13,44 @@ class BackoffStrategy(str, Enum):
     JITTER = "jitter"
 
 
-def fixed_backoff(delay: float, **_) -> Iterator[float]:
-    """Yield a constant delay between every retry."""
+def fixed_backoff(delay: float = 1.0, **_: Any) -> Generator[float, None, None]:
+    """Yield a constant delay every time."""
     while True:
         yield delay
 
 
-def linear_backoff(delay: float, increment: float = 1.0, **_) -> Iterator[float]:
+def linear_backoff(
+    initial: float = 1.0, increment: float = 1.0, maximum: float = 60.0, **_: Any
+) -> Generator[float, None, None]:
     """Yield linearly increasing delays."""
-    current = delay
+    current = initial
     while True:
-        yield current
+        yield min(current, maximum)
         current += increment
 
 
 def exponential_backoff(
-    delay: float, multiplier: float = 2.0, max_delay: float = 60.0, **_
-) -> Iterator[float]:
-    """Yield exponentially increasing delays, capped at max_delay."""
-    current = delay
+    initial: float = 1.0, multiplier: float = 2.0, maximum: float = 60.0, **_: Any
+) -> Generator[float, None, None]:
+    """Yield exponentially increasing delays."""
+    current = initial
     while True:
-        yield min(current, max_delay)
+        yield min(current, maximum)
         current *= multiplier
 
 
 def jitter_backoff(
-    delay: float, multiplier: float = 2.0, max_delay: float = 60.0, **_
-) -> Iterator[float]:
-    """Yield exponentially increasing delays with full jitter."""
-    current = delay
+    initial: float = 1.0,
+    multiplier: float = 2.0,
+    maximum: float = 60.0,
+    jitter_range: float = 0.5,
+    **_: Any,
+) -> Generator[float, None, None]:
+    """Yield exponentially increasing delays with random jitter."""
+    current = initial
     while True:
-        yield random.uniform(0, min(current, max_delay))
+        jitter = random.uniform(-jitter_range, jitter_range) * current
+        yield min(max(0.0, current + jitter), maximum)
         current *= multiplier
 
 
@@ -55,14 +62,7 @@ _STRATEGY_MAP = {
 }
 
 
-def get_backoff_iterator(strategy: BackoffStrategy, **kwargs) -> Iterator[float]:
-    """Return the appropriate backoff iterator for the given strategy."""
-    factory = _STRATEGY_MAP.get(strategy)
-    if factory is None:
-        raise ValueError(f"Unknown backoff strategy: {strategy}")
-    return factory(**kwargs)
-
-
-def wait(seconds: float) -> None:
-    """Sleep for the given number of seconds (thin wrapper for testing)."""
-    time.sleep(seconds)
+def get_backoff_sequence(config: Any) -> Generator[float, None, None]:
+    """Return a backoff generator based on the config's strategy."""
+    strategy_fn = _STRATEGY_MAP[BackoffStrategy(config.backoff_strategy)]
+    return strategy_fn(**config.backoff_kwargs)
