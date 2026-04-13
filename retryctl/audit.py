@@ -71,3 +71,28 @@ class AuditLogger:
         entry = build_entry(summary, extra=extra)
         self.write(entry)
         return entry
+
+    def read_entries(self) -> list[AuditEntry]:
+        """Read and parse all entries from the audit log.
+
+        Returns an empty list if the log file does not exist yet.
+        Raises ``json.JSONDecodeError`` if a line contains malformed JSON.
+        """
+        if not self._path.exists():
+            return []
+        entries = []
+        with self._path.open("r", encoding="utf-8") as fh:
+            for lineno, line in enumerate(fh, start=1):
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    data = json.loads(line)
+                except json.JSONDecodeError as exc:
+                    raise json.JSONDecodeError(
+                        f"Malformed JSON on line {lineno} of {self._path}: {exc.msg}",
+                        exc.doc,
+                        exc.pos,
+                    ) from exc
+                entries.append(AuditEntry(**data))
+        return entries
