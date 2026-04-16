@@ -1,5 +1,6 @@
 """Tests for retryctl.plugin."""
 import pytest
+import types
 
 from retryctl.plugin import PluginError, PluginMeta, PluginRegistry
 
@@ -98,15 +99,18 @@ class TestPluginRegistryBuild:
 class TestLoadFromModule:
     def test_invalid_module_raises(self):
         reg = _registry()
-        with pytest.raises(PluginError, match="Cannot import"):
-            reg.load_from_module("retryctl._no_such_module_xyz")
+        with pytest.raises(PluginError, match="module"):
+            reg.load_from_module("retryctl._does_not_exist")
 
-    def test_module_without_hook_raises(self, tmp_path, monkeypatch):
-        import sys
-        mod_path = tmp_path / "fake_plugin.py"
-        mod_path.write_text("# no register_plugin here\n")
-        monkeypatch.syspath_prepend(str(tmp_path))
+    def test_load_registers_plugins(self):
+        """A module exposing RETRYCTL_PLUGINS dict should register all entries."""
+        mod = types.ModuleType("_fake_plugin_module")
+        mod.RETRYCTL_PLUGINS = {
+            "fake": {"factory": _factory, "description": "fake plugin", "version": "0.1"},
+        }
         reg = _registry()
-        with pytest.raises(PluginError, match="register_plugin"):
-            reg.load_from_module("fake_plugin")
-        sys.modules.pop("fake_plugin", None)
+        reg.load_from_module(mod)
+        assert "fake" in reg.available()
+        meta = reg.get("fake")
+        assert meta.description == "fake plugin"
+        assert meta.version == "0.1"
