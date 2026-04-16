@@ -27,6 +27,16 @@ class CacheEntry:
     def expired(self) -> bool:
         return (time.monotonic() - self.created_at) > self.ttl
 
+    @property
+    def age(self) -> float:
+        """Seconds elapsed since this entry was created."""
+        return time.monotonic() - self.created_at
+
+    @property
+    def remaining_ttl(self) -> float:
+        """Seconds until this entry expires (0.0 if already expired)."""
+        return max(0.0, self.ttl - self.age)
+
 
 class ResultCache:
     """In-memory TTL cache keyed by a hash of the command arguments."""
@@ -78,6 +88,13 @@ class ResultCache:
     def clear(self) -> None:
         """Evict all entries."""
         self._store.clear()
+
+    def evict_expired(self) -> int:
+        """Remove all expired entries and return the number evicted."""
+        expired_keys = [k for k, v in self._store.items() if v.expired]
+        for k in expired_keys:
+            del self._store[k]
+        return len(expired_keys)
 
     def __len__(self) -> int:
         return len(self._store)
