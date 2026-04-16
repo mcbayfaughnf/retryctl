@@ -37,7 +37,7 @@ class ConditionMiddleware:
         return next_fn(result)
 
     # ------------------------------------------------------------------
-    # Convenience factory
+    # Convenience factories
     # ------------------------------------------------------------------
 
     @classmethod
@@ -49,7 +49,28 @@ class ConditionMiddleware:
         name:
             A condition name as registered in
             :mod:`retryctl.condition_registry`.
+
+        Raises
+        ------
+        KeyError
+            If *name* is not found in the condition registry.
         """
         from retryctl.condition_registry import lookup  # local to avoid cycles
 
         return cls(predicate=lookup(name))
+
+    @classmethod
+    def from_predicate(cls, predicate: RetryPredicate) -> "ConditionMiddleware":
+        """Build a :class:`ConditionMiddleware` directly from a callable.
+
+        This is a thin convenience wrapper around the default constructor that
+        makes call-sites more explicit when constructing from a predicate
+        rather than a registry name.
+
+        Parameters
+        ----------
+        predicate:
+            Any callable that accepts a :class:`CommandResult` and returns a
+            ``bool`` indicating whether a retry should be attempted.
+        """
+        return cls(predicate=predicate)
