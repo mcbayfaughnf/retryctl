@@ -39,14 +39,28 @@ def format_json(result: "CommandResult") -> str:
     return json.dumps(payload, indent=2)
 
 
+def format_csv(result: "CommandResult") -> str:
+    """Return a single-line CSV summary of a CommandResult.
+
+    Fields: command, returncode, attempts, succeeded, elapsed
+    Stdout and stderr are omitted to keep the output machine-friendly.
+    """
+    command_field = ' '.join(result.command).replace('"', '""')
+    return (
+        f'"{command_field}",{result.returncode},{result.attempts},'
+        f'{result.succeeded},{result.elapsed:.6f}'
+    )
+
+
 _FORMATS = {
     "text": format_text,
     "json": format_json,
+    "csv": format_csv,
 }
 
 
 def get_formatter(fmt: str):
-    """Return a formatter callable for *fmt* (``'text'`` or ``'json'``).
+    """Return a formatter callable for *fmt* (``'text'``, ``'json'``, or ``'csv'``).
 
     Raises
     ------
