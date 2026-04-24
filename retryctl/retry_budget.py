@@ -77,6 +77,21 @@ class RetryBudget:
         """Clear all recorded timestamps (useful for testing)."""
         self._timestamps.clear()
 
+    def time_until_next(self) -> float:
+        """Return seconds until at least one retry slot becomes available.
+
+        Returns 0.0 if a slot is already available.  Useful for callers
+        that want to sleep or surface a wait time rather than immediately
+        raising on a full budget.
+        """
+        self._evict_old()
+        if len(self._timestamps) < self.limit:
+            return 0.0
+        # The oldest timestamp is the next one to expire out of the window.
+        oldest = self._timestamps[0]
+        wait = (oldest + self.window) - time.monotonic()
+        return max(0.0, wait)
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
