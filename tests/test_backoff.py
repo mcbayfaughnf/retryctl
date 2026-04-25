@@ -21,6 +21,10 @@ class TestFixedBackoff:
         it = fixed_backoff(delay=2.0)
         assert take(4, it) == [2.0, 2.0, 2.0, 2.0]
 
+    def test_zero_delay(self):
+        it = fixed_backoff(delay=0.0)
+        assert take(3, it) == [0.0, 0.0, 0.0]
+
 
 class TestLinearBackoff:
     def test_increases_by_increment(self):
@@ -44,6 +48,16 @@ class TestExponentialBackoff:
         assert values[0] == 10.0
         assert values[1] == 30.0
 
+    def test_caps_at_max_delay_indefinitely(self):
+        """Once max_delay is reached, subsequent values should remain capped."""
+        it = exponential_backoff(delay=10.0, multiplier=10.0, max_delay=50.0)
+        values = take(5, it)
+        assert all(v <= 50.0 for v in values)
+        # After the cap is hit, all remaining values should equal max_delay
+        assert values[2] == 50.0
+        assert values[3] == 50.0
+        assert values[4] == 50.0
+
 
 class TestJitterBackoff:
     def test_values_within_bounds(self):
@@ -66,3 +80,11 @@ class TestGetBackoffIterator:
     def test_invalid_strategy_raises(self):
         with pytest.raises((ValueError, KeyError)):
             get_backoff_iterator("unknown", delay=1.0)  # type: ignore
+
+    @pytest.mark.parametrize("strategy", list(BackoffStrategy))
+    def test_all_strategies_return_iterator(self, strategy):
+        """Every defined BackoffStrategy should return a valid iterator."""
+        it = get_backoff_iterator(strategy, delay=1.0)
+        value = next(it)
+        assert isinstance(value, float)
+        assert value >= 0.0
