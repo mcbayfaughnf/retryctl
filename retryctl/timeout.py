@@ -26,6 +26,12 @@ def timeout_context(seconds: float | None, scope: str = "attempt") -> Generator[
     callers can always wrap their code without checking first.
 
     Only works on POSIX systems (requires SIGALRM).
+
+    .. warning::
+        This context manager is **not** re-entrant.  Nesting two
+        ``timeout_context`` calls will cause the inner one to overwrite the
+        outer SIGALRM timer.  The outer timer is restored on exit, but any
+        time already elapsed against it is lost.
     """
     if not seconds:
         yield
@@ -57,3 +63,18 @@ def remaining(overall_deadline: float | None, elapsed: float) -> float | None:
         return None
     left = overall_deadline - elapsed
     return max(left, 0.0)
+
+
+def deadline_exceeded(overall_deadline: float | None, elapsed: float) -> bool:
+    """Return ``True`` when *elapsed* has met or surpassed *overall_deadline*.
+
+    Convenience wrapper around :func:`remaining` so callers can write a
+    simple boolean check instead of comparing the return value themselves::
+
+        if deadline_exceeded(deadline, elapsed):
+            raise TimeoutExpired(deadline, scope="overall")
+
+    Returns ``False`` when *overall_deadline* is ``None`` (no deadline set).
+    """
+    left = remaining(overall_deadline, elapsed)
+    return left is not None and left == 0.0
